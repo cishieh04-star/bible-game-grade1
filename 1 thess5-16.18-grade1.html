@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>聖經拼音遊戲</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        * { box-sizing: border-box; touch-action: manipulation; }
+        body { font-family: 'PingFang TC', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #fdf6e3; padding: 5px; margin: 0; min-height: 100vh; }
+        .card { width: 100%; max-width: 500px; background: white; padding: 10px; border-radius: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; }
+        .yt-link { display: inline-block; margin: 5px 0; padding: 6px 12px; background: #FF0000; color: white; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 13px; }
+        .bible-verse { font-size: 20px; font-weight: bold; color: #5d4037; margin: 15px 0; line-height: 1.5; }
+        .target-word { font-size: 40px; color: #5d4037; margin: 5px 0; font-weight: bold; }
+        .zhuyin-slots { display: flex; gap: 3px; justify-content: center; margin: 10px 0; height: 35px; }
+        .slot { width: 35px; height: 35px; border: 2px dashed #8b4513; display: flex; align-items: center; justify-content: center; font-size: 20px; border-radius: 6px; background: #fffdf0; }
+        .progress-bar { font-size: 14px; font-weight: bold; color: #5d4037; margin-bottom: 10px; }
+        .options { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 15px; }
+        .btn { padding: 4px; border: 2px solid #8b4513; border-radius: 6px; font-size: 14px; cursor: pointer; background: white; min-width: 38px; height: 38px; }
+        .btn-tone { background-color: #e1f5fe; font-size: 16px; font-weight: bold; }
+        .btn-fixed { background-color: #f0e68c; font-size: 12px; }
+        #restart-btn { margin-top: 10px; padding: 8px 16px; background: #2e7d32; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; display: none; }
+        #timer { font-size: 16px; font-weight: bold; color: #2e7d32; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="card" id="start-screen">
+    <h1>聖經拼音遊戲</h1>
+    <div class="bible-verse">要常常喜樂，不住地禱告，<br>凡事謝恩。(帖前 5:16-18)</div>
+    <button style="padding: 15px 30px; font-size: 20px; background: #2e7d32; color: white; border: none; border-radius: 10px; cursor: pointer;" onclick="startGame()">開始挑戰</button>
+</div>
+
+<div class="card" id="game-screen" style="display:none;">
+    <a href="https://youtube.com/shorts/mkpb6Uw1HfY" target="_blank" class="yt-link">🎥 觀看複習影片</a>
+    <div id="timer">時間: 0秒</div>
+    <div id="progress" class="progress-bar">進度: 1 / 14</div>
+    <div class="bible-verse">要常常喜樂，不住地禱告，凡事謝恩。(帖前 5:16-18)</div>
+    <div class="target-word" id="char-display"></div>
+    <div class="zhuyin-slots" id="zhuyin-slots">
+        <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    </div>
+    <div class="options" id="options"></div>
+    <button id="restart-btn" onclick="location.reload()">再玩一次</button>
+</div>
+
+<script>
+    const scriptFlow = [
+        { char: "要", components: ["ㄧ", "ㄠ", "ˋ", " "] }, { char: "常", components: ["ㄔ", "ㄤ", "ˊ", " "] },
+        { char: "常", components: ["ㄔ", "ㄤ", "ˊ", " "] }, { char: "喜", components: ["ㄒ", "ㄧ", "ˇ", " "] },
+        { char: "樂", components: ["ㄌ", "ㄜ", "ˋ", " "] }, { char: "不", components: ["ㄅ", "ㄨ", "ˊ", " "] },
+        { char: "住", components: ["ㄓ", "ㄨ", "ˋ", " "] }, { char: "地", components: ["ㄉ", "ㄧ", "ˋ", " "] },
+        { char: "禱", components: ["ㄉ", "ㄠ", "ˇ", " "] }, { char: "告", components: ["ㄍ", "ㄠ", "ˋ", " "] },
+        { char: "凡", components: ["ㄈ", "ㄢ", "ˊ", " "] }, { char: "事", components: ["ㄕ", "ˋ", " ", " "] },
+        { char: "謝", components: ["ㄒ", "ㄧ", "ㄝ", "ˋ"] }, { char: "恩", components: ["ㄣ", " ", " ", " "] }
+    ];
+
+    const fixedOptions = ["空格", "˙", "ˊ", "ˇ", "ˋ", "ㄧ", "ㄠ", "ㄔ", "ㄤ", "ㄒ", "ㄌ", "ㄜ", "ㄅ", "ㄨ", "ㄓ", "ㄉ", "ㄍ", "ㄈ", "ㄢ", "ㄕ", "ㄝ", "ㄣ"];
+
+    let currentIdx = 0, slotIdx = 0, currentInput = ["", "", "", ""], seconds = 0, timerInterval;
+
+    function startGame() {
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('game-screen').style.display = 'block';
+        timerInterval = setInterval(() => { 
+            seconds++; 
+            document.getElementById('timer').textContent = "時間: " + seconds + "秒"; 
+        }, 1000);
+        loadStep();
+    }
+
+    function loadStep() {
+        document.getElementById('char-display').textContent = scriptFlow[currentIdx].char;
+        document.getElementById('progress').textContent = `進度: ${currentIdx + 1} / 14`;
+        resetInput(); renderButtons();
+    }
+
+    function renderButtons() {
+        const optionsDiv = document.getElementById('options'); optionsDiv.innerHTML = '';
+        fixedOptions.forEach(op => {
+            const btn = document.createElement('button');
+            if (op === "空格") btn.className = 'btn btn-fixed';
+            else if (["˙", "ˊ", "ˇ", "ˋ"].includes(op)) btn.className = 'btn btn-tone';
+            else btn.className = 'btn';
+            btn.textContent = op;
+            btn.onclick = () => handleInput(op === "空格" ? " " : op);
+            optionsDiv.appendChild(btn);
+        });
+    }
+
+    function handleInput(val) {
+        if (slotIdx < 4 && val === scriptFlow[currentIdx].components[slotIdx]) {
+            currentInput[slotIdx] = val; updateSlots(); slotIdx++;
+            if (slotIdx === 4) {
+                confetti({ particleCount: 80, spread: 50, origin: { y: 0.6 } });
+                const msg = new SpeechSynthesisUtterance("太棒了");
+                msg.lang = 'zh-TW'; window.speechSynthesis.speak(msg);
+                setTimeout(() => {
+                    if (currentIdx === scriptFlow.length - 1) {
+                        clearInterval(timerInterval);
+                        document.getElementById('restart-btn').style.display = 'inline-block';
+                        document.getElementById('options').style.display = 'none';
+                        window.open("https://youtube.com/shorts/mkpb6Uw1HfY", "_blank");
+                    } else { currentIdx++; loadStep(); }
+                }, 800);
+            }
+        } else if (slotIdx < 4) { alert("拼音錯誤，請再試一次！"); resetInput(); }
+    }
+
+    function updateSlots() { document.querySelectorAll('.slot').forEach((s, i) => s.textContent = currentInput[i] === " " ? "＿" : currentInput[i]); }
+    function resetInput() { currentInput = ["", "", "", ""]; slotIdx = 0; updateSlots(); }
+</script>
+</body>
+</html>
